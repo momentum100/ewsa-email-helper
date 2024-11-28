@@ -59,6 +59,7 @@ class DownloadEmailsForAccount implements ShouldQueue
 
             $client->connect();
 
+            
             $folder = $client->getFolder('INBOX');
             \Log::info('Connected to INBOX folder');
 
