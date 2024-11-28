@@ -39,7 +39,7 @@ class DownloadEmailsForAccount implements ShouldQueue
                 'host'          => $this->account->imap_host,
                 'port'          => $this->account->imap_port,
                 'encryption'    => $this->account->imap_encryption, 
-                'validate_cert' => true,
+                'validate_cert' => false,
                 'username'      => $this->account->imap_user,
                 'password'      => $this->account->imap_pass,
                 'protocol'      => 'imap'
