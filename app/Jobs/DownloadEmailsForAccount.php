@@ -94,11 +94,13 @@ class DownloadEmailsForAccount implements ShouldQueue
                             $toEmail = $toAddresses[0]->mail ?? null;
                         }
 
-                        // Skip if we don't have a valid from address
-                        if (!$fromEmail) {
-                            \Log::warning('Skipping email with missing from address', [
+                        // Skip if we don't have a valid from address or to address (likely spam)
+                        if (!$fromEmail || !$toEmail) {
+                            \Log::warning('Skipping email with missing from or to address', [
                                 'subject' => $decodedSubject,
-                                'date' => $message->getDate()
+                                'date' => $message->getDate(),
+                                'from' => $fromEmail,
+                                'to' => $toEmail
                             ]);
                             continue;
                         }
@@ -152,7 +154,14 @@ class DownloadEmailsForAccount implements ShouldQueue
     // Add this method to handle sending Telegram messages
     protected function sendTelegramMessage($message)
     {
-        // Implement your Telegram API call here
-        // Example: Telegram::sendMessage($message);
+        try {
+            $telegramController = new \App\Http\Controllers\TelegramController();
+            return $telegramController->sendMessage('Email Account Alert', $message);
+        } catch (\Exception $e) {
+            \Log::error('Failed to send Telegram message:', [
+                'error' => $e->getMessage(),
+                'message' => $message
+            ]);
+        }
     }
 }
