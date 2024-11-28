@@ -33,107 +33,136 @@ class DownloadEmailsForAccount implements ShouldQueue
      * @return void
      */
     public function handle()
-{
-    // Increase memory limit for this job
-    ini_set('memory_limit', '512M');
-    
-    try {
-        $client = Client::make([
-            'host'          => $this->account->imap_host,
-            'port'          => $this->account->imap_port,
-            'encryption'    => $this->account->imap_encryption, 
-            'validate_cert' => false,
-            'username'      => $this->account->imap_user,
-            'password'      => $this->account->imap_pass,
-            'protocol'      => 'imap'
-        ]);
-
-        \Log::info('Downloading emails for account:', [
-            'id' => $this->account->id,
-            'email_address' => $this->account->email_address,
-            'imap_host' => $this->account->imap_host,
-            'imap_port' => $this->account->imap_port,
-            'imap_encryption' => $this->account->imap_encryption,
-            'imap_user' => $this->account->imap_user
-        ]);
-
-        $client->connect();
-
-        $folder = $client->getFolder('INBOX');
-        $since = new \DateTime('2024-11-20');
+    {
+        // Increase memory limit for this job
+        ini_set('memory_limit', '512M');
         
-        // Process messages in chunks to manage memory
-        $chunk_size = 100;
-        $page = 1;
-        
-        do {
-            $messages = $folder->messages()
-                ->since($since)
-                ->limit($chunk_size, ($page - 1) * $chunk_size)
-                ->get();
+        try {
+            $client = Client::make([
+                'host'          => $this->account->imap_host,
+                'port'          => $this->account->imap_port,
+                'encryption'    => $this->account->imap_encryption, 
+                'validate_cert' => false,
+                'username'      => $this->account->imap_user,
+                'password'      => $this->account->imap_pass,
+                'protocol'      => 'imap'
+            ]);
+
+            \Log::info('Downloading emails for account:', [
+                'id' => $this->account->id,
+                'email_address' => $this->account->email_address,
+                'imap_host' => $this->account->imap_host,
+                'imap_port' => $this->account->imap_port,
+                'imap_encryption' => $this->account->imap_encryption,
+                'imap_user' => $this->account->imap_user
+            ]);
+
+            $client->connect();
+
+            $folder = $client->getFolder('INBOX');
+            \Log::info('Connected to INBOX folder');
+
+            $since = new \DateTime('2024-11-20');
+            \Log::info('Searching for emails since:', ['date' => $since->format('Y-m-d H:i:s')]);
             
-            foreach ($messages as $message) {
-                $decodedSubject = iconv_mime_decode($message->getSubject(), 0, 'UTF-8');
-                
-                // Safely get 'from' address
-                $fromAddresses = $message->getFrom();
-                $fromEmail = null;
-                if (!empty($fromAddresses) && isset($fromAddresses[0]) && $fromAddresses[0]) {
-                    $fromEmail = $fromAddresses[0]->mail ?? null;
-                }
-                
-                // Safely get 'to' address
-                $toAddresses = $message->getTo();
-                $toEmail = null;
-                if (!empty($toAddresses) && isset($toAddresses[0]) && $toAddresses[0]) {
-                    $toEmail = $toAddresses[0]->mail ?? null;
-                }
+            // Process messages in chunks to manage memory
+            $chunk_size = 50;
+            $page = 1;
+            
+            do {
+                try {
+                    \Log::info('Fetching messages chunk:', ['page' => $page, 'chunk_size' => $chunk_size]);
+                    
+                    $messages = $folder->messages()
+                        ->since($since)
+                        ->limit($chunk_size, ($page - 1) * $chunk_size)
+                        ->all()
+                        ->get();
+                    
+                    \Log::info('Retrieved messages count:', ['count' => count($messages)]);
 
-                // Skip if we don't have a valid from address
-                if (!$fromEmail) {
-                    \Log::warning('Skipping email with missing from address', [
-                        'subject' => $decodedSubject,
-                        'date' => $message->getDate()
+                    if (empty($messages)) {
+                        \Log::info('No messages found in this chunk');
+                        break;
+                    }
+
+                    foreach ($messages as $message) {
+                        try {
+                            $decodedSubject = iconv_mime_decode($message->getSubject(), 0, 'UTF-8');
+                            \Log::info('Processing email:', ['subject' => $decodedSubject]);
+                            
+                            // Safely get 'from' address
+                            $fromAddresses = $message->getFrom();
+                            $fromEmail = null;
+                            if (!empty($fromAddresses) && isset($fromAddresses[0]) && $fromAddresses[0]) {
+                                $fromEmail = $fromAddresses[0]->mail ?? null;
+                            }
+                            
+                            // Safely get 'to' address
+                            $toAddresses = $message->getTo();
+                            $toEmail = null;
+                            if (!empty($toAddresses) && isset($toAddresses[0]) && $toAddresses[0]) {
+                                $toEmail = $toAddresses[0]->mail ?? null;
+                            }
+
+                            // Skip if we don't have a valid from address
+                            if (!$fromEmail) {
+                                \Log::warning('Skipping email with missing from address', [
+                                    'subject' => $decodedSubject,
+                                    'date' => $message->getDate()
+                                ]);
+                                continue;
+                            }
+
+                            Email::updateOrCreate(
+                                [
+                                    'subject' => $decodedSubject, 
+                                    'received_at' => $message->getDate(),
+                                    'email_account_id' => $this->account->id
+                                ],
+                                [
+                                    'from'             => $fromEmail,
+                                    'to'               => $toEmail,
+                                    'subject'          => $decodedSubject,
+                                    'body'             => $message->getTextBody(),
+                                    'received_at'      => $message->getDate(),
+                                    'email_account_id' => $this->account->id
+                                ]
+                            );
+                        } catch (\Exception $e) {
+                            \Log::error('Failed to process email:', [
+                                'subject' => $decodedSubject,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    }
+                    
+                    $page++;
+                    // Clear some memory
+                    gc_collect_cycles();
+                    
+                } catch (\Exception $e) {
+                    \Log::error('Failed to fetch messages chunk:', [
+                        'page' => $page,
+                        'chunk_size' => $chunk_size,
+                        'error' => $e->getMessage()
                     ]);
-                    continue;
                 }
-
-                Email::updateOrCreate(
-                    [
-                        'subject' => $decodedSubject, 
-                        'received_at' => $message->getDate(),
-                        'email_account_id' => $this->account->id
-                    ],
-                    [
-                        'from'             => $fromEmail,
-                        'to'               => $toEmail,
-                        'subject'          => $decodedSubject,
-                        'body'             => $message->getTextBody(),
-                        'received_at'      => $message->getDate(),
-                        'email_account_id' => $this->account->id
-                    ]
-                );
-            }
+            } while (count($messages) === $chunk_size);
             
-            $page++;
-            // Clear some memory
-            gc_collect_cycles();
-            
-        } while (count($messages) === $chunk_size);
-        
-    } catch (\Exception $e) {
-        \Log::error('Failed to download emails for account:', [
-            'id' => $this->account->id,
-            'email_address' => $this->account->email_address,
-            'error' => $e->getMessage()
-        ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to download emails for account:', [
+                'id' => $this->account->id,
+                'email_address' => $this->account->email_address,
+                'error' => $e->getMessage()
+            ]);
 
-        // Send a Telegram message about the account failure
-        $telegramMessage = "Failed to connect to email account: " . $this->account->email_address;
-        // Assuming you have a function to send Telegram messages
-        $this->sendTelegramMessage($telegramMessage);
+            // Send a Telegram message about the account failure
+            $telegramMessage = "Failed to connect to email account: " . $this->account->email_address;
+            // Assuming you have a function to send Telegram messages
+            $this->sendTelegramMessage($telegramMessage);
+        }
     }
-}
     // Add this method to handle sending Telegram messages
     protected function sendTelegramMessage($message)
     {
