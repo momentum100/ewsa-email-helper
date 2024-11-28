@@ -37,8 +37,15 @@ class EmailController extends Controller
         // Fetch selected email IDs from the request
         $selectedEmailIds = $request->input('selected_emails', []);
 
-        // If no emails are selected, process all
-        $emails = empty($selectedEmailIds) ? Email::all() : Email::whereIn('id', $selectedEmailIds)->get();
+        // If no emails are selected, process all uncategorized emails
+        $emails = empty($selectedEmailIds) 
+            ? Email::whereNull('category')->orWhere('category', '')->get() 
+            : Email::whereIn('id', $selectedEmailIds)
+                ->where(function($query) {
+                    $query->whereNull('category')
+                        ->orWhere('category', '');
+                })
+                ->get();
 
         // Log the start of the categorization process
         Log::info('Starting email categorization process.');
