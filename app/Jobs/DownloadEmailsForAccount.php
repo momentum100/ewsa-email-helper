@@ -65,90 +65,76 @@ class DownloadEmailsForAccount implements ShouldQueue
             $since = new \DateTime('2024-11-20');
             \Log::info('Searching for emails since:', ['date' => $since->format('Y-m-d H:i:s')]);
             
-            // Process messages in chunks to manage memory
-            $chunk_size = 50;
-            $page = 1;
-            
-            do {
-                try {
-                    \Log::info('Fetching messages chunk:', ['page' => $page, 'chunk_size' => $chunk_size]);
-                    
-                    $messages = $folder->messages()
-                        ->since($since)
-                        ->limit($chunk_size, ($page - 1) * $chunk_size)
-                        ->all()
-                        ->get();
-                    
-                    \Log::info('Retrieved messages count:', ['count' => count($messages)]);
+            try {
+                \Log::info('Fetching messages');
+                
+                $messages = $folder->messages()
+                    ->since($since)
+                    ->all()
+                    ->get();
+                
+                \Log::info('Retrieved messages count:', ['count' => count($messages)]);
 
-                    if (empty($messages)) {
-                        \Log::info('No messages found in this chunk');
-                        break;
-                    }
-
-                    foreach ($messages as $message) {
-                        try {
-                            $decodedSubject = iconv_mime_decode($message->getSubject(), 0, 'UTF-8');
-                            \Log::info('Processing email:', ['subject' => $decodedSubject]);
-                            
-                            // Safely get 'from' address
-                            $fromAddresses = $message->getFrom();
-                            $fromEmail = null;
-                            if (!empty($fromAddresses) && isset($fromAddresses[0]) && $fromAddresses[0]) {
-                                $fromEmail = $fromAddresses[0]->mail ?? null;
-                            }
-                            
-                            // Safely get 'to' address
-                            $toAddresses = $message->getTo();
-                            $toEmail = null;
-                            if (!empty($toAddresses) && isset($toAddresses[0]) && $toAddresses[0]) {
-                                $toEmail = $toAddresses[0]->mail ?? null;
-                            }
-
-                            // Skip if we don't have a valid from address
-                            if (!$fromEmail) {
-                                \Log::warning('Skipping email with missing from address', [
-                                    'subject' => $decodedSubject,
-                                    'date' => $message->getDate()
-                                ]);
-                                continue;
-                            }
-
-                            Email::updateOrCreate(
-                                [
-                                    'subject' => $decodedSubject, 
-                                    'received_at' => $message->getDate(),
-                                    'email_account_id' => $this->account->id
-                                ],
-                                [
-                                    'from'             => $fromEmail,
-                                    'to'               => $toEmail,
-                                    'subject'          => $decodedSubject,
-                                    'body'             => $message->getTextBody(),
-                                    'received_at'      => $message->getDate(),
-                                    'email_account_id' => $this->account->id
-                                ]
-                            );
-                        } catch (\Exception $e) {
-                            \Log::error('Failed to process email:', [
-                                'subject' => $decodedSubject,
-                                'error' => $e->getMessage()
-                            ]);
+                foreach ($messages as $message) {
+                    try {
+                        $decodedSubject = iconv_mime_decode($message->getSubject(), 0, 'UTF-8');
+                        \Log::info('Processing email:', ['subject' => $decodedSubject]);
+                        
+                        // Safely get 'from' address
+                        $fromAddresses = $message->getFrom();
+                        $fromEmail = null;
+                        if (!empty($fromAddresses) && isset($fromAddresses[0]) && $fromAddresses[0]) {
+                            $fromEmail = $fromAddresses[0]->mail ?? null;
                         }
+                        
+                        // Safely get 'to' address
+                        $toAddresses = $message->getTo();
+                        $toEmail = null;
+                        if (!empty($toAddresses) && isset($toAddresses[0]) && $toAddresses[0]) {
+                            $toEmail = $toAddresses[0]->mail ?? null;
+                        }
+
+                        // Skip if we don't have a valid from address
+                        if (!$fromEmail) {
+                            \Log::warning('Skipping email with missing from address', [
+                                'subject' => $decodedSubject,
+                                'date' => $message->getDate()
+                            ]);
+                            continue;
+                        }
+
+                        Email::updateOrCreate(
+                            [
+                                'subject' => $decodedSubject, 
+                                'received_at' => $message->getDate(),
+                                'email_account_id' => $this->account->id
+                            ],
+                            [
+                                'from'             => $fromEmail,
+                                'to'               => $toEmail,
+                                'subject'          => $decodedSubject,
+                                'body'             => $message->getTextBody(),
+                                'received_at'      => $message->getDate(),
+                                'email_account_id' => $this->account->id
+                            ]
+                        );
+                        
+                        // Clear some memory after each email
+                        gc_collect_cycles();
+                        
+                    } catch (\Exception $e) {
+                        \Log::error('Failed to process email:', [
+                            'subject' => $decodedSubject ?? 'unknown',
+                            'error' => $e->getMessage()
+                        ]);
                     }
-                    
-                    $page++;
-                    // Clear some memory
-                    gc_collect_cycles();
-                    
-                } catch (\Exception $e) {
-                    \Log::error('Failed to fetch messages chunk:', [
-                        'page' => $page,
-                        'chunk_size' => $chunk_size,
-                        'error' => $e->getMessage()
-                    ]);
                 }
-            } while (count($messages) === $chunk_size);
+                
+            } catch (\Exception $e) {
+                \Log::error('Failed to fetch messages:', [
+                    'error' => $e->getMessage()
+                ]);
+            }
             
         } catch (\Exception $e) {
             \Log::error('Failed to download emails for account:', [
