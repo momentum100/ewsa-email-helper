@@ -28,16 +28,16 @@
                     @csrf
                     @method('PUT')
                     <td class="border border-gray-200 px-4 py-2">
-                        <input type="text" name="name" value="{{ $user->name }}" class="border border-gray-300 p-1">
+                        <input type="text" name="name" value="{{ $user->name }}" class="border border-gray-300 p-1" required>
                     </td>
                     <td class="border border-gray-200 px-4 py-2">
-                        <input type="text" name="surname" value="{{ $user->surname }}" class="border border-gray-300 p-1">
+                        <input type="text" name="surname" value="{{ $user->surname }}" class="border border-gray-300 p-1" required>
                     </td>
                     <td class="border border-gray-200 px-4 py-2">
-                        <input type="email" name="email" value="{{ $user->email }}" class="border border-gray-300 p-1">
+                        <input type="email" name="email" value="{{ $user->email }}" class="border border-gray-300 p-1" required>
                     </td>
                     <td class="border border-gray-200 px-4 py-2">
-                        <input type="text" name="signature" value="{{ $user->signature }}" class="border border-gray-300 p-1">
+                        <textarea name="signature" class="border border-gray-300 p-1" required>{{ $user->signature }}</textarea>
                     </td>
                     <td class="border border-gray-200 px-4 py-2">
                         <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded">Update</button>

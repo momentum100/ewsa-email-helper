@@ -144,15 +144,16 @@ Classification and Action Determination:
 
 Output:
 - do not include any markup 
+- never add markup like ```json ```html or anything else
 - output strictly only json, so it can be processed futher automatically
 Provide the answer in the following JSON format:
 
 {
-  \"language\": \"Email language\",
-  \"category\": \"Price_Request\" or \"General\",
-  \"contains_price_request\": true or false,
-  \"data_complete\": true or false,
-  \"provided_data\": {
+    \"language\": \"Email language\",
+    \"category\": \"Price_Request\" or \"General\",
+    \"contains_price_request\": true or false,
+    \"data_complete\": true or false,
+    \"provided_data\": {
     \"origin\": \"value or empty string\",
     \"destination\": \"value or empty string\",
     \"cargo_name_or_hs_code\": \"value or empty string\",
@@ -193,7 +194,7 @@ Provide the answer in the following JSON format:
 
     public function generateMissingDataEmail($language, $providedData, $missingData, $contentForCategorization)
     {
-        $modelName = 'gpt-4o-mini';
+        $modelName = 'o1-mini';
 
         $prompt = 'You are an assistant helping to compose an email requesting additional information from a client.
 
@@ -234,15 +235,16 @@ Based on the initial correspondence, extract any provided information for the fo
   - Volume (if dimensions are not provided)
 
 Instructions:
-0. For content detect oroginal email language ie English, Russian, Estonian, German or another, use detected language creating reply
+0. For content detect original email language ie English, Russian, Estonian, German or another, use detected language for creating reply
 0.1 In case of Russian language use appropriate to sender gender greeting.
 
 1. Identify Provided Information: Determine which of the above fields have been provided in the initial correspondence.
 2. Identify Missing Mandatory Information: Determine which mandatory fields are missing.
+2.1 Include existing information along with a missing data, like prefilled form data.
 
 3. Compose the Email:
    - Include Provided Information: Acknowledge and confirm the information the client has already provided.
-   - Including infomration use exact leyout as above fields, you need to translate it to appropriate language
+   - Including infomation use exact leyout as above fields, you need to translate it to appropriate language
 
    - Route:
   - From:
@@ -292,94 +294,115 @@ Instructions:
 
 5. generated emails examples
 
-Example 1 
+### Example 1 
 
-Маршрут:
+<p>Приветствую, Иван</p>
+<p>Спасибо за предоставленную информацию. Для продолжения, пожалуйста, предоставьте недостающие данные:</p>
 
-Откуда:
-Страна: США
-Город: Майами
-Индекс:
+<p>Маршрут:</p>
 
-** Примечание: Для локации "Откуда" нам нужно либо страна и город, либо страна и почтовый индекс.
+<p>Откуда:</p>
+<ul>
+  <li>Страна: США</li>
+  <li>Город: Майами</li>
+  <li>Индекс:</li>
+</ul>
+<p>* Примечание: Для локации "Откуда" нам нужно либо страна и город, либо страна и почтовый индекс.</p>
 
-Куда:
-Страна: ОАЭ
-Город: Дубай
-Почтовый индекс:
+<p>Куда:</p>
+<ul>
+  <li>Страна: ОАЭ</li>
+  <li>Город: Дубай</li>
+  <li>Почтовый индекс:</li>
+</ul>
+<p>* Примечание: Для локации "Куда" нам нужно либо страна и город, либо страна и почтовый индекс.</p>
 
-** Примечание: Для локации "Куда" нам нужно либо страна и город, либо страна и почтовый индекс.
+<p><b>Дата или месяц загрузки:</b></p>
 
-Дата или месяц загрузки:
+<p>Наименование груза или HS/ТНВЭД код: 0901.21</p>
 
-Наименование груза или HS/ТНВЭД код: 0901.21
+<p>Способ загрузки:</p>
+<p>(если требуется, пожалуйста, уточните)</p>
 
-Способ загрузки: 
-(если требуется, пожалуйста, уточните)
+<p>Тип транспорта: MSC</p>
 
-Тип транспорта: MSC
+<p><b>Поддоны (количество):</b></p>
+<p>ИЛИ</p>
+<p><b>LDM:</b></p>
 
-Стоимость груза:
+<p><b>Вес:</b></p>
 
-Валюта: 
+<p><b>Габариты:</b></p>
+<ul>
+  <li><b>Длина:</b></li>
+  <li><b>Ширина:</b></li>
+  <li><b>Высота:</b></li>
+</ul>
+<p>ИЛИ</p>
+<p><b>Объем:</b></p>
 
-Поддоны (количество):
-
-ИЛИ 
-
-LDM:
- 
-
-Вес:
-
-Габариты:
-
-Длина:
-Ширина:
-Высота:
-ИЛИ
-Объем:
+### END OF EXAMPLE_1
 
 
-Example 2
+### Example_2
+Dear, Ivan
 
-From:
+<p>Thank you for the provided information. To continue, please provide the missing information:</p>
+<p>From:</p>
+<ul>
+  <li>Country: USA</li>
+  <li>City:</li>
+  <li>Postal Code: 10022</li>
+</ul>
+<p>Note: For the "From" location, we need either the country and city, or the country and postal code.</p>
 
-Country: USA
-City: 
-Postal Code: 10022
-Note: For the "From" location, we need either the country and city, or the country and postal code.
-To:
+<p>To:</p>
+<ul>
+  <li>Country: UAE</li>
+  <li>City: Dubai</li>
+  <li>Postal Code:</li>
+</ul>
+<p>Note: For the "To" location, we need either the country and city, or the country and postal code.</p>
 
-Country: UAE
-City: Dubai
-Postal Code: 
-Note: For the "To" location, we need either the country and city, or the country and postal code.
-Loading Date or Month: 
+<p><b>Loading Date or Month:</b></p>
 
-Cargo name or HS/ТНВЭД Code: Passenger cars, yacht in dismantled form
+<p>Cargo name or HS/ТНВЭД Code: Passenger cars, yacht in dismantled form</p>
 
-Loading Method:  (if required, please specify)
+<p>Loading Method: (if required, please specify)</p>
 
-Transport Type: MSC
+<p>Transport Type: MSC</p>
 
-Pallets (quantity): 
-OR 
-LDM:
+<p><b>Pallets (quantity):</b></p>
+<p>OR</p>
+<p><b>LDM:</b></p>
 
-Weight: 
+<p><b>Weight:</b></p>
 
-Dimensions:
+<p><b>Dimensions:</b></p>
+<ul>
+  <li><b>Length:</b></li>
+  <li><b>Width:</b></li>
+  <li><b>Height:</b></li>
+</ul>
+<p>OR</p>
+<p><b>Volume:</b></p>
 
-Length:
-Width:
-Height:
-OR
-Volume: 
+
+### END OF EXAMPLE_2
+
+Output:
+Formatting: Ensure the email is well-organized and easy to read.
+Use HTML formatting to structure the email.
+Use <b> tags to highlight missing mandatory information.
+Compose the email following the above instructions.
+
 
 Output:
 
-Compose the email following the above instructions.
+Compose the email following the above instructions, using HTML formatting and bolding missing mandatory information with <b> tags.
+DO NOT ADD markup LIKE ``` HTML or any other and  formatting other than HTML. Output Clean html only, no additional formatting or comments
+DO NOT ADD SIGNATURE AT ALL.
+
 ';
 
         $result = OpenAI::chat()->create([

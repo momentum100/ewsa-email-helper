@@ -85,35 +85,25 @@ class UserManagementController extends Controller
             'name' => 'required|string|max:255',
             'surname' => 'required|string|max:255',
             'signature' => 'required|string',
+            'email' => 'required|email|unique:users,email,'.$id,
             'password' => 'nullable|string|min:8|confirmed',
-            'user_id' => 'required|integer', // Ensure user_id is present
         ]);
-        // Log validation errors
-        if ($validator->fails()) {
-            \Log::error('Validation errors:', $validator->errors()->toArray());
-            return redirect()->back()->withErrors($validator)->withInput();
-        }
-
-        // Check if the user_id from the form matches the route parameter
-        if ($validatedData['user_id'] != $id) {
-            return redirect()->back()->withErrors(['user_id' => 'User ID mismatch.']);
-        }
 
         $user = User::findOrFail($id);
-
-        // Update user details
-        $user->update([
-            'name' => $validatedData['name'],
-            'surname' => $validatedData['surname'],
-            'signature' => $validatedData['signature'],
-        ]);
-
-        // Update password if provided
+        
+        // Update user data
+        $user->name = $validatedData['name'];
+        $user->surname = $validatedData['surname'];
+        $user->signature = $validatedData['signature'];
+        $user->email = $validatedData['email'];
+        
         if (!empty($validatedData['password'])) {
-            $user->update(['password' => bcrypt($validatedData['password'])]);
+            $user->password = bcrypt($validatedData['password']);
         }
+        
+        $user->save();
 
-        return redirect()->route('users.show', $id)->with('status', 'User updated successfully!');
+        return redirect()->back()->with('status', 'User updated successfully!');
     }
 
     // Show the form for creating a new user

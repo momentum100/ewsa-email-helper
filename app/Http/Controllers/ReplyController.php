@@ -7,6 +7,9 @@ use App\Models\Reply;
 use Illuminate\Support\Facades\Log;
 use App\Models\Email;
 use App\Models\EmailAccount;
+use App\Services\EmailService;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Config;
 
 class ReplyController extends Controller
 {
@@ -64,19 +67,31 @@ class ReplyController extends Controller
         // Retrieve the reply using the ID
         $reply = Reply::findOrFail($id);
 
-        // Fetch email accounts connected to the authenticated user
-        $userEmailAccounts = EmailAccount::where('user_id', auth()->id())->get();
+        // Get the email account
+        $emailAccount = EmailAccount::findOrFail($request->email_account_id);
 
-        // Logic to send the AI reply
-        // For example, you might send an email or update the status of the reply
+        try {
+            // Create email service instance
+            $emailService = new EmailService($emailAccount);
 
-        // Update the status to 1
-        $reply->status = 1;
-        $reply->save();
+            // Send email using the service
+            $emailService->sendEmail(
+                $request->reply_to,
+                $request->reply_subject,
+                $request->reply_body,
+                $request->reply_to_cc
+            );
 
-        // Redirect back with a success message and user email accounts
-        return redirect()->route('replies.show', $id)
-                         ->with('success', 'AI reply sent successfully.')
-                         ->with('userEmailAccounts', $userEmailAccounts);
+            // Update the status to sent
+            $reply->status = 1;
+            $reply->save();
+
+            return redirect()->route('replies.show', $id)
+                            ->with('success', 'Reply sent successfully.');
+        } catch (\Exception $e) {
+            Log::error("Failed to send email: " . $e->getMessage());
+            return redirect()->route('replies.show', $id)
+                            ->with('error', 'Failed to send email: ' . $e->getMessage());
+        }
     }
 }

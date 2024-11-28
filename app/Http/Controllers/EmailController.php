@@ -31,6 +31,9 @@ class EmailController extends Controller
 
     public function categorize(Request $request)
     {
+        // Set timeout to 5 minutes
+        set_time_limit(300);
+        
         // Fetch selected email IDs from the request
         $selectedEmailIds = $request->input('selected_emails', []);
 
@@ -92,8 +95,23 @@ class EmailController extends Controller
             Log::info("OpenAI API response for email ID: {$email->id}", ['response' => $result]);
             Log::info("OpenAI API cost for email ID: {$email->id}", ['cost' => $cost]);
 
-            // Assuming the API returns a category in the response
-            $responseContent = json_decode($result->choices[0]->message->content, true);
+            // Clean the response content by removing code block markers
+            $content = $result->choices[0]->message->content;
+            $content = str_replace('```json', '', $content);
+            $content = str_replace('```', '', $content);
+            $content = trim($content);
+
+            // Parse the cleaned JSON response
+            $responseContent = json_decode($content, true);
+            
+            if ($responseContent === null) {
+                Log::error("Failed to parse JSON response for email ID: {$email->id}", [
+                    'content' => $content,
+                    'json_error' => json_last_error_msg()
+                ]);
+                continue;
+            }
+
             $category = $responseContent['category'];
             $email->category = $category;
 
@@ -144,8 +162,8 @@ class EmailController extends Controller
                 }
 
                 // Append user signature to the body
-                $userSignature = auth()->user()->signature;
-                $body .= "\n\n" . $userSignature;
+                //$userSignature = auth()->user()->signature;
+                $body .= "\n\n" ; // . $userSignature;
 
                 // Send message using TelegramController
                 $response = $telegramController->sendMessage($subject, $body);
@@ -173,4 +191,3 @@ class EmailController extends Controller
         return redirect()->route('emails.index')->with('status', 'Emails categorized successfully!');
     }
 }
-
