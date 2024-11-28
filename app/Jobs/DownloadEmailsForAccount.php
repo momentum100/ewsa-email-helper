@@ -57,7 +57,7 @@ class DownloadEmailsForAccount implements ShouldQueue
             $client->connect();
 
             $folder = $client->getFolder('INBOX');
-            $since = new \DateTime('2024-11-28');
+            $since = new \DateTime('2024-11-20');
             $messages = $folder->messages()
                 ->since($since)
                 ->all()
