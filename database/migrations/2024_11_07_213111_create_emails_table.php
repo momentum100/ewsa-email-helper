@@ -12,7 +12,7 @@ public function up()
     Schema::create('emails', function (Blueprint $table) {
         $table->id();
         $table->string('from');
-        $table->string('to');
+        $table->string('to')->nullable();
         $table->string('subject');
         $table->text('body');
         $table->string('category', 255)->nullable(); 
