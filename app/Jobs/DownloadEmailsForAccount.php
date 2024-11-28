@@ -34,6 +34,9 @@ class DownloadEmailsForAccount implements ShouldQueue
      */
     public function handle()
     {
+        // Increase memory limit for this job
+        ini_set('memory_limit', '512M');
+        
         try {
             $client = Client::make([
                 'host'          => $this->account->imap_host,
@@ -58,30 +61,45 @@ class DownloadEmailsForAccount implements ShouldQueue
 
             $folder = $client->getFolder('INBOX');
             $since = new \DateTime('2024-11-20');
-            $messages = $folder->messages()
-                ->since($since)
-                ->all()
-                ->get();
+            
+            // Process messages in chunks to manage memory
+            $chunk_size = 100;
+            $page = 1;
+            
+            do {
+                $messages = $folder->messages()
+                    ->since($since)
+                    ->limit($chunk_size, ($page - 1) * $chunk_size)
+                    ->get();
+                
+                foreach ($messages as $message) {
+                    $decodedSubject = iconv_mime_decode($message->getSubject(), 0, 'UTF-8');
+                    $toAddresses = $message->getTo();
+                    $toEmail = !empty($toAddresses) ? $toAddresses[0]->mail : null;
 
-            foreach ($messages as $message) {
-                $decodedSubject = iconv_mime_decode($message->getSubject(), 0, 'UTF-8');
-
-                Email::updateOrCreate(
-                    [
-                        'subject' => $decodedSubject, 
-                        'received_at' => $message->getDate(),
-                        'email_account_id' => $this->account->id
-                    ],
-                    [
-                        'from'             => $message->getFrom()[0]->mail,
-                        'to'               => $message->getTo()[0]->mail ?? null,
-                        'subject'          => $decodedSubject,
-                        'body'             => $message->getTextBody(),
-                        'received_at'      => $message->getDate(),
-                        'email_account_id' => $this->account->id
-                    ]
-                );
-            }
+                    Email::updateOrCreate(
+                        [
+                            'subject' => $decodedSubject, 
+                            'received_at' => $message->getDate(),
+                            'email_account_id' => $this->account->id
+                        ],
+                        [
+                            'from'             => $message->getFrom()[0]->mail,
+                            'to'               => $toEmail,
+                            'subject'          => $decodedSubject,
+                            'body'             => $message->getTextBody(),
+                            'received_at'      => $message->getDate(),
+                            'email_account_id' => $this->account->id
+                        ]
+                    );
+                }
+                
+                $page++;
+                // Clear some memory
+                gc_collect_cycles();
+                
+            } while (count($messages) === $chunk_size);
+            
         } catch (\Exception $e) {
             \Log::error('Failed to download emails for account:', [
                 'id' => $this->account->id,
