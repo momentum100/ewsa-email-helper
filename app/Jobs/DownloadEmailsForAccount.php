@@ -57,7 +57,11 @@ class DownloadEmailsForAccount implements ShouldQueue
             $client->connect();
 
             $folder = $client->getFolder('INBOX');
-            $messages = $folder->messages()->all()->get();
+            $since = new \DateTime('2024-11-28');
+            $messages = $folder->messages()
+                ->since($since)
+                ->all()
+                ->get();
 
             foreach ($messages as $message) {
                 $decodedSubject = iconv_mime_decode($message->getSubject(), 0, 'UTF-8');
